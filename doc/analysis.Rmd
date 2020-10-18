@@ -1,0 +1,181 @@
+---
+title: "Untitled Draft"
+author: "Report Author"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+drake::loadd(all_data)
+drake::loadd(variant_step_plot)
+drake::loadd(type_dict)
+library(tidyverse)
+```
+
+# Data
+
+```{r}
+all_data
+```
+
+# Number of unique reads by number of reads
+
+```{r}
+variant_step_plot +
+  theme_minimal() +
+  labs(
+    title = "One color for each sample",
+    x = "Number of sequenced alleles",
+    y = "Number of unique alleles"
+    )
+```
+
+# Count of alleles in 1_M.bscflags sample
+
+```{r}
+n_obs_1_M <- all_data %>%
+      filter(sample == "1_M.bscflags") %>%
+  nrow()
+
+all_data %>%
+      filter(sample == "1_M.bscflags") %>%
+  count(htype, sort = TRUE) %>%
+  ggplot(aes(n, htype)) +
+  geom_col() +
+  geom_vline(xintercept = n_obs_1_M * c(0.01, 0.001), color = c("red", "blue")) +
+  theme_minimal() +
+  scale_x_log10() +
+  labs(title = "Notice that x-axis is on log-scale",
+       subtitle = "Proportion: blue = 0.001, red = 0.01")
+```
+
+# Proportion 0.05
+
+```{r}
+drake::loadd(prop_0.05)
+prop_0.05
+```
+
+# Proportion 0.02
+
+```{r}
+drake::loadd(prop_0.02)
+prop_0.02
+```
+
+# Proportion 0.01
+
+```{r}
+drake::loadd(prop_0.01)
+prop_0.01
+```
+
+
+# Proportion 0.001
+
+```{r}
+drake::loadd(prop_0.001)
+prop_0.001
+```
+
+# Clustering
+
+We calculated the number of patterns that appears at least 1% of the times for each sample and amplicon. This gives us data on the following form:
+
+```{r}
+drake::loadd(amplicon_0.01)
+amplicon_0.01 %>% rename(n_pattern = n_dist)
+```
+
+We then transform the data to have amplicons as columns and samples as rows. Do mean-imputation of missing values. Then we project the data down to a lower dimensional space and see if we can find cluster with an kmeans algorithm.
+
+```{r}
+drake::loadd(amplicon_pca_clusters)
+
+amplicon_pca_clusters <- amplicon_pca_clusters %>% 
+  mutate(.cluster = factor(.cluster, c(2, 1, 3), c("red", "green", "blue")))
+
+amplicon_pca_clusters %>%
+  ggplot(aes(PC1, PC2, color = .cluster)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "PCA projection")
+```
+
+```{r}
+drake::loadd(amplicon_umap_clusters)
+
+amplicon_umap_clusters <- amplicon_umap_clusters %>%
+  mutate(.cluster = factor(.cluster, c(1, 2, 3), c("red", "green", "blue")))
+
+amplicon_umap_clusters %>%
+  ggplot(aes(umap_1, umap_2, color = .cluster)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "UMAP projection")
+```
+
+# Clusters applied to first chart
+
+We take the clusters we found in the UMAP project and color the first chart accordingly.
+
+```{r}
+drake::loadd(variant_counts)
+variant_counts %>%
+  left_join(amplicon_umap_clusters, by = "sample") %>%
+  ggplot(aes(readseq, n_dis, group = sample, color = .cluster)) +
+  geom_step() +
+  guides(color = "none") +
+  theme_minimal() +
+  labs(
+    title = "Colored accoring to UMAP clusters",
+    x = "Number of sequenced alleles",
+    y = "Number of unique alleles"
+    )
+```
+
+We take the clusters we found in the PCA project and color the first chart accordingly.
+
+```{r}
+drake::loadd(variant_counts)
+variant_counts %>%
+  left_join(amplicon_pca_clusters, by = "sample") %>%
+  ggplot(aes(readseq, n_dis, group = sample, color = .cluster)) +
+  geom_step() +
+  guides(color = "none") +
+  theme_minimal() +
+  labs(
+    title = "Colored accoring to PCA clusters",
+    x = "Number of sequenced alleles",
+    y = "Number of unique alleles"
+    )
+```
+
+# Clusters
+
+```{r}
+left_join(
+  amplicon_pca_clusters %>% select(sample, pca_cluster = .cluster),
+  amplicon_umap_clusters %>% select(sample, umap_cluster = .cluster)
+) %>%
+  left_join(type_dict) %>%
+  arrange(umap_cluster) %>%
+  knitr::kable()
+```
+
+## Reproducibility
+
+<details><summary>Reproducibility receipt</summary>
+
+```{r}
+## datetime
+Sys.time()
+
+## session info
+sessionInfo()
+```
+
+</details>
